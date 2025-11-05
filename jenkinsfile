@@ -1,67 +1,32 @@
+
 pipeline {
     agent any
     stages {
         stage('Checkout') {
             steps {
-                // Clone the GitHub repository
                 checkout scm
             }
         }
         
-        stage('Build Docker Image') {
+        stage('Build') {
             steps {
-                script {
-                    // Build using Dockerfile from the repo
-                    docker.build("minaz0509/my-jenkins-app:${env.BUILD_ID}")
-                }
+                sh 'docker build -t minaz0509/my-jenkins-app:latest .'
             }
         }
         
-        stage('Test') {
+        stage('Push') {
             steps {
-                script {
-                    // Run tests inside the container (example)
-                    docker.image("minaz0509/my-jenkins-app:${env.BUILD_ID}").inside {
-                        sh 'echo "Running tests..."'
-                        // Add your test commands here
-                        // sh 'npm test' or './run_tests.sh'
-                    }
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-hub-cred',
+                    passwordVariable: 'DOCKER_PASSWORD',
+                    usernameVariable: 'DOCKER_USERNAME'
+                )]) {
+                    sh '''
+                        docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+                        docker push minaz0509/my-jenkins-app:latest
+                    '''
                 }
             }
-        }
-        
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    // Login and push to Docker Hub
-                    withCredentials([usernamePassword(
-                        credentialsId: 'docker-hub-cred',
-                        passwordVariable: 'DOCKER_PASSWORD',
-                        usernameVariable: 'DOCKER_USERNAME'
-                    )]) {
-                        docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-cred') {
-                            docker.image("minaz0509/my-jenkins-app:${env.BUILD_ID}").push()
-                            // Also tag as latest
-                            docker.image("minaz0509/my-jenkins-app:${env.BUILD_ID}").push('latest')
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    post {
-        always {
-            // Clean up - remove built images
-            script {
-                sh 'docker system prune -f || true'
-            }
-        }
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed!'
         }
     }
 }
